@@ -1,0 +1,984 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>GlobalMaxPool — DeFi Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700;900&family=DM+Mono:wght@300;400;500&family=Jost:wght@300;400;500;600&display=swap" />
+<script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.7.0/ethers.umd.min.js"></script>
+<style>
+:root {
+  --bg:        #04040c;
+  --bg2:       #080814;
+  --panel:     rgba(255,255,255,0.03);
+  --border:    rgba(220,170,50,0.18);
+  --gold:      #e8b84b;
+  --gold2:     #ffd97d;
+  --green:     #0dffaa;
+  --red:       #ff4f6a;
+  --blue:      #4fc3f7;
+  --text:      #e8e0d0;
+  --muted:     #7a7060;
+  --radius:    14px;
+  --glow:      0 0 30px rgba(232,184,75,0.15);
+}
+
+* { margin:0; padding:0; box-sizing:border-box; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Jost', sans-serif;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* ── Animated BG ── */
+.bg-canvas {
+  position: fixed; inset: 0; z-index: 0; pointer-events: none;
+  background:
+    radial-gradient(ellipse 80% 60% at 10% 20%, rgba(232,184,75,0.05) 0%, transparent 60%),
+    radial-gradient(ellipse 60% 80% at 90% 80%, rgba(13,255,170,0.04) 0%, transparent 60%),
+    radial-gradient(ellipse 100% 100% at 50% 50%, #030309 0%, #04040c 100%);
+}
+.bg-grid {
+  position: fixed; inset: 0; z-index: 0; pointer-events: none;
+  background-image:
+    linear-gradient(rgba(232,184,75,0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(232,184,75,0.03) 1px, transparent 1px);
+  background-size: 60px 60px;
+}
+
+/* ── Layout ── */
+#app { position: relative; z-index: 1; min-height: 100vh; }
+
+header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 20px 40px;
+  border-bottom: 1px solid var(--border);
+  background: rgba(4,4,12,0.85);
+  backdrop-filter: blur(20px);
+  position: sticky; top: 0; z-index: 100;
+}
+.logo {
+  font-family: 'Cinzel', serif;
+  font-size: 1.4rem; font-weight: 900;
+  background: linear-gradient(135deg, var(--gold), var(--gold2));
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  letter-spacing: 2px;
+}
+.logo span { color: var(--green); -webkit-text-fill-color: var(--green); }
+
+.header-right { display: flex; align-items: center; gap: 16px; }
+.chain-badge {
+  font-family: 'DM Mono', monospace; font-size: 0.7rem;
+  background: rgba(13,255,170,0.08); border: 1px solid rgba(13,255,170,0.3);
+  color: var(--green); padding: 6px 14px; border-radius: 20px;
+}
+#connectBtn {
+  font-family: 'Cinzel', serif; font-size: 0.8rem; font-weight: 600;
+  letter-spacing: 1px;
+  background: linear-gradient(135deg, var(--gold), #c8942a);
+  border: none; color: #000; padding: 10px 24px; border-radius: 8px;
+  cursor: pointer; transition: all .25s;
+}
+#connectBtn:hover { transform: translateY(-2px); box-shadow: 0 6px 24px rgba(232,184,75,0.4); }
+.wallet-addr {
+  font-family: 'DM Mono', monospace; font-size: 0.72rem;
+  background: var(--panel); border: 1px solid var(--border);
+  padding: 8px 16px; border-radius: 8px; color: var(--gold);
+}
+
+main {
+  max-width: 1200px; margin: 0 auto; padding: 36px 24px 60px;
+  display: flex; flex-direction: column; gap: 28px;
+}
+
+/* ── Hero Stats Bar ── */
+.stats-bar {
+  display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px;
+  background: var(--border);
+  border: 1px solid var(--border); border-radius: var(--radius);
+  overflow: hidden;
+}
+.stat-cell {
+  background: var(--bg2); padding: 22px 24px;
+  display: flex; flex-direction: column; gap: 4px;
+  transition: background .2s;
+}
+.stat-cell:hover { background: rgba(232,184,75,0.04); }
+.stat-label {
+  font-family: 'DM Mono', monospace; font-size: 0.65rem;
+  letter-spacing: 2px; text-transform: uppercase; color: var(--muted);
+}
+.stat-value {
+  font-family: 'Cinzel', serif; font-size: 1.4rem; font-weight: 700;
+  color: var(--gold2);
+}
+.stat-sub { font-size: 0.72rem; color: var(--muted); }
+
+/* ── Grid Layout ── */
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+.grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px; }
+
+/* ── Panel Card ── */
+.card {
+  background: var(--bg2); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 24px;
+  box-shadow: var(--glow);
+  transition: border-color .3s;
+}
+.card:hover { border-color: rgba(232,184,75,0.35); }
+.card-title {
+  font-family: 'Cinzel', serif; font-size: 0.85rem; font-weight: 600;
+  letter-spacing: 3px; text-transform: uppercase; color: var(--gold);
+  margin-bottom: 20px; display: flex; align-items: center; gap: 10px;
+}
+.card-title .dot {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--gold); box-shadow: 0 0 10px var(--gold);
+}
+
+/* ── Data Row ── */
+.data-row {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 10px 0; border-bottom: 1px solid rgba(255,255,255,0.04);
+  font-size: 0.88rem;
+}
+.data-row:last-child { border-bottom: none; }
+.data-key { color: var(--muted); }
+.data-val {
+  font-family: 'DM Mono', monospace; font-weight: 500;
+  color: var(--text);
+}
+.data-val.gold { color: var(--gold); }
+.data-val.green { color: var(--green); }
+.data-val.red { color: var(--red); }
+
+/* ── Progress Bar ── */
+.progress-wrap { margin-top: 14px; }
+.progress-label { display: flex; justify-content: space-between; font-size: 0.75rem; color: var(--muted); margin-bottom: 6px; }
+.progress-bar {
+  height: 6px; background: rgba(255,255,255,0.06); border-radius: 3px; overflow: hidden;
+}
+.progress-fill {
+  height: 100%; border-radius: 3px;
+  background: linear-gradient(90deg, var(--gold), var(--green));
+  transition: width .8s ease;
+}
+
+/* ── Input ── */
+.input-group { display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px; }
+.input-group label { font-size: 0.75rem; letter-spacing: 1.5px; text-transform: uppercase; color: var(--muted); }
+.inp {
+  background: rgba(255,255,255,0.04); border: 1px solid var(--border);
+  color: var(--text); font-family: 'DM Mono', monospace; font-size: 0.9rem;
+  padding: 12px 16px; border-radius: 10px; outline: none; width: 100%;
+  transition: border-color .2s;
+}
+.inp:focus { border-color: var(--gold); }
+.inp::placeholder { color: var(--muted); }
+
+/* ── Buttons ── */
+.btn {
+  font-family: 'Cinzel', serif; font-size: 0.78rem; font-weight: 600;
+  letter-spacing: 1.5px; text-transform: uppercase;
+  padding: 12px 20px; border-radius: 10px; border: none;
+  cursor: pointer; transition: all .25s; width: 100%;
+}
+.btn-gold {
+  background: linear-gradient(135deg, var(--gold), #c8942a);
+  color: #000;
+}
+.btn-gold:hover { transform: translateY(-2px); box-shadow: 0 8px 28px rgba(232,184,75,0.35); }
+.btn-green {
+  background: rgba(13,255,170,0.12); border: 1px solid rgba(13,255,170,0.4);
+  color: var(--green);
+}
+.btn-green:hover { background: rgba(13,255,170,0.22); transform: translateY(-2px); }
+.btn-outline {
+  background: transparent; border: 1px solid var(--border); color: var(--gold);
+}
+.btn-outline:hover { border-color: var(--gold); background: rgba(232,184,75,0.06); }
+.btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none !important; box-shadow: none !important; }
+
+/* ── Rank Badge ── */
+.rank-badge {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 64px; height: 64px; border-radius: 50%;
+  font-family: 'Cinzel', serif; font-size: 1.5rem; font-weight: 900;
+  background: linear-gradient(135deg, var(--gold), #c8942a);
+  color: #000; box-shadow: 0 0 30px rgba(232,184,75,0.5);
+  margin: 0 auto 16px; display: block; text-align: center; line-height: 64px;
+}
+
+/* ── Leg Bars ── */
+.leg-row { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+.leg-label { font-family: 'DM Mono', monospace; font-size: 0.7rem; color: var(--muted); width: 40px; }
+.leg-bar-wrap { flex: 1; background: rgba(255,255,255,0.05); border-radius: 4px; height: 8px; overflow: hidden; }
+.leg-bar-fill { height: 100%; border-radius: 4px; transition: width .8s ease; }
+.leg-bar-fill.l1 { background: linear-gradient(90deg, var(--gold), var(--gold2)); }
+.leg-bar-fill.l2 { background: linear-gradient(90deg, var(--green), #00ccaa); }
+.leg-bar-fill.l3 { background: linear-gradient(90deg, var(--blue), #0090cc); }
+.leg-count { font-family: 'DM Mono', monospace; font-size: 0.75rem; color: var(--text); width: 40px; text-align: right; }
+
+/* ── Level Table ── */
+.level-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+.level-table th {
+  font-family: 'DM Mono', monospace; font-size: 0.62rem; letter-spacing: 2px;
+  text-transform: uppercase; color: var(--muted); padding: 8px 10px;
+  border-bottom: 1px solid var(--border); text-align: left;
+}
+.level-table td { padding: 9px 10px; border-bottom: 1px solid rgba(255,255,255,0.03); }
+.level-table tr:hover td { background: rgba(232,184,75,0.03); }
+.lvl-num {
+  font-family: 'Cinzel', serif; font-size: 0.85rem; font-weight: 700;
+  color: var(--gold); width: 24px; height: 24px; border-radius: 6px;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: rgba(232,184,75,0.12);
+}
+
+/* ── Toast ── */
+#toast {
+  position: fixed; bottom: 30px; right: 30px; z-index: 9999;
+  background: var(--bg2); border: 1px solid var(--border); border-radius: 12px;
+  padding: 14px 20px; font-size: 0.85rem; max-width: 320px;
+  transform: translateY(100px); opacity: 0; transition: all .35s;
+  box-shadow: 0 12px 40px rgba(0,0,0,0.5);
+}
+#toast.show { transform: translateY(0); opacity: 1; }
+#toast.success { border-color: rgba(13,255,170,0.5); color: var(--green); }
+#toast.error   { border-color: rgba(255,79,106,0.5); color: var(--red); }
+#toast.info    { border-color: rgba(232,184,75,0.4); color: var(--gold); }
+
+/* ── Connect Overlay ── */
+#overlay {
+  position: fixed; inset: 0; z-index: 200;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(4,4,12,0.92); backdrop-filter: blur(12px);
+  transition: opacity .4s;
+}
+.overlay-card {
+  text-align: center; padding: 48px 56px; border: 1px solid var(--border);
+  border-radius: 20px; background: var(--bg2); max-width: 420px;
+  box-shadow: 0 0 80px rgba(232,184,75,0.08);
+}
+.overlay-card h1 {
+  font-family: 'Cinzel', serif; font-size: 2rem; font-weight: 900;
+  background: linear-gradient(135deg, var(--gold), var(--gold2));
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  margin-bottom: 8px;
+}
+.overlay-card p { color: var(--muted); font-size: 0.88rem; line-height: 1.7; margin-bottom: 32px; }
+.pulse-ring {
+  width: 90px; height: 90px; border-radius: 50%;
+  border: 2px solid var(--gold); margin: 0 auto 32px;
+  display: flex; align-items: center; justify-content: center;
+  position: relative; animation: pulse 2s ease infinite;
+}
+@keyframes pulse {
+  0%,100% { box-shadow: 0 0 0 0 rgba(232,184,75,0.4); }
+  50%      { box-shadow: 0 0 0 16px rgba(232,184,75,0); }
+}
+.pulse-ring svg { width: 40px; height: 40px; fill: var(--gold); }
+
+/* ── Loading Spinner ── */
+.spinner {
+  display: inline-block; width: 14px; height: 14px;
+  border: 2px solid rgba(255,255,255,0.2); border-top-color: var(--gold);
+  border-radius: 50%; animation: spin .7s linear infinite; vertical-align: middle; margin-right: 6px;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── Tabs ── */
+.tabs { display: flex; gap: 4px; margin-bottom: 20px; }
+.tab {
+  font-family: 'Cinzel', serif; font-size: 0.72rem; letter-spacing: 1.5px;
+  padding: 8px 18px; border-radius: 8px; border: 1px solid transparent;
+  cursor: pointer; transition: all .2s; color: var(--muted); background: none;
+}
+.tab.active { border-color: var(--border); background: rgba(232,184,75,0.08); color: var(--gold); }
+.tab:hover:not(.active) { color: var(--text); }
+
+/* ── Announce Banner ── */
+.announce {
+  background: rgba(13,255,170,0.06); border: 1px solid rgba(13,255,170,0.2);
+  border-radius: 10px; padding: 12px 18px; font-size: 0.8rem;
+  color: var(--green); display: flex; align-items: center; gap: 10px;
+}
+.announce::before { content: '◉'; font-size: 0.6rem; animation: blink 1.2s ease infinite; }
+@keyframes blink { 0%,100%{opacity:1}50%{opacity:0.3} }
+
+/* ── Referral count boxes ── */
+.ref-box {
+  text-align: center; padding: 16px 12px;
+  background: rgba(255,255,255,0.02); border-radius: 10px;
+  border: 1px solid rgba(255,255,255,0.06);
+}
+.ref-box .num { font-family: 'Cinzel', serif; font-size: 1.8rem; font-weight: 700; color: var(--gold2); }
+.ref-box .lbl { font-size: 0.7rem; color: var(--muted); margin-top: 4px; text-transform: uppercase; letter-spacing: 1px; }
+
+/* Responsive */
+@media(max-width:768px) {
+  header { padding: 16px 20px; }
+  main { padding: 20px 16px; }
+  .stats-bar { grid-template-columns: 1fr 1fr; }
+  .grid-2, .grid-3 { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+<div class="bg-canvas"></div>
+<div class="bg-grid"></div>
+
+<!-- Connect Overlay -->
+<div id="overlay">
+  <div class="overlay-card">
+    <div class="pulse-ring">
+      <svg viewBox="0 0 24 24"><path d="M21 18v1a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v1M16 12l-4-4-4 4M12 8v8"/></svg>
+    </div>
+    <h1>GlobalMaxPool</h1>
+    <p>Decentralized Yield Pool — Connect your wallet to access your dashboard, deposit, and claim rewards.</p>
+    <button class="btn btn-gold" id="overlayConnectBtn" style="font-size:0.9rem;padding:14px 32px;border-radius:12px;">
+      Connect Wallet
+    </button>
+    <p style="margin-top:16px;font-size:0.72rem;color:#3a3020;">Make sure MetaMask is installed</p>
+  </div>
+</div>
+
+<div id="app">
+  <!-- Header -->
+  <header>
+    <div class="logo">Global<span>Max</span>Pool</div>
+    <div class="header-right">
+      <span class="chain-badge" id="chainBadge">● BSC</span>
+      <div class="wallet-addr" id="walletAddr" style="display:none"></div>
+      <button class="btn btn-gold" id="connectBtn">Connect Wallet</button>
+    </div>
+  </header>
+
+  <main>
+    <!-- Loading state -->
+    <div id="loadingState" style="text-align:center;padding:60px 0;display:none">
+      <div class="spinner" style="width:28px;height:28px;border-width:3px"></div>
+      <p style="margin-top:16px;color:var(--muted)">Loading dashboard…</p>
+    </div>
+
+    <!-- Dashboard content (hidden until loaded) -->
+    <div id="dashContent" style="display:none;flex-direction:column;gap:28px;">
+
+      <!-- Announce -->
+      <div class="announce" id="refActiveStatus">Loading referral status…</div>
+
+      <!-- Pool Stats Bar -->
+      <div class="stats-bar">
+        <div class="stat-cell">
+          <div class="stat-label">Total Pool</div>
+          <div class="stat-value" id="statPool">—</div>
+          <div class="stat-sub">Contract Balance</div>
+        </div>
+        <div class="stat-cell">
+          <div class="stat-label">Total Deposited</div>
+          <div class="stat-value" id="statDeposited">—</div>
+          <div class="stat-sub">All Users Combined</div>
+        </div>
+        <div class="stat-cell">
+          <div class="stat-label">Total Users</div>
+          <div class="stat-value" id="statUsers">—</div>
+          <div class="stat-sub">Registered Members</div>
+        </div>
+        <div class="stat-cell">
+          <div class="stat-label">Daily ROI</div>
+          <div class="stat-value" style="color:var(--green)">2%</div>
+          <div class="stat-sub">Max 200% Return</div>
+        </div>
+      </div>
+
+      <!-- Row 1: User Info + Deposit -->
+      <div class="grid-2">
+
+        <!-- User Dashboard -->
+        <div class="card">
+          <div class="card-title"><span class="dot"></span> My Portfolio</div>
+          <div class="data-row"><span class="data-key">My Deposit</span><span class="data-val gold" id="myDeposit">—</span></div>
+          <div class="data-row"><span class="data-key">Total Earned</span><span class="data-val green" id="myEarned">—</span></div>
+          <div class="data-row"><span class="data-key">Pool Claimed</span><span class="data-val" id="myClaimed">—</span></div>
+          <div class="data-row"><span class="data-key">Referral Income</span><span class="data-val gold" id="myRefIncome">—</span></div>
+          <div class="data-row"><span class="data-key">Missed Income</span><span class="data-val red" id="myMissed">—</span></div>
+          <div class="data-row"><span class="data-key">Max Return (2x)</span><span class="data-val" id="myMaxReturn">—</span></div>
+          <div class="data-row"><span class="data-key">Remaining Cap</span><span class="data-val" id="myRemaining">—</span></div>
+
+          <div class="progress-wrap">
+            <div class="progress-label">
+              <span>ROI Progress</span>
+              <span id="roiPct">0%</span>
+            </div>
+            <div class="progress-bar"><div class="progress-fill" id="roiBar" style="width:0%"></div></div>
+          </div>
+        </div>
+
+        <!-- Deposit Card -->
+        <div class="card">
+          <div class="card-title"><span class="dot"></span> Deposit</div>
+
+          <div class="input-group">
+            <label>Amount (Tokens)</label>
+            <input class="inp" type="number" id="depositAmt" placeholder="Min 1 token" step="1" min="1" />
+          </div>
+          <div class="input-group">
+            <label>Referrer Address (optional)</label>
+            <input class="inp" type="text" id="refAddr" placeholder="0x..." />
+          </div>
+
+          <button class="btn btn-outline" id="approveBtn" style="margin-bottom:10px">
+            Step 1 — Approve Token
+          </button>
+          <button class="btn btn-gold" id="depositBtn" disabled>
+            Step 2 — Deposit
+          </button>
+
+          <div style="margin-top:20px;padding-top:16px;border-top:1px solid rgba(255,255,255,0.05)">
+            <div class="data-row"><span class="data-key">Min Deposit</span><span class="data-val" id="minDep">1 Token</span></div>
+            <div class="data-row"><span class="data-key">Monthly Req (Referral)</span><span class="data-val" id="monthlyReq">—</span></div>
+            <div class="data-row"><span class="data-key">This Month Deposited</span><span class="data-val gold" id="thisMonthDep">—</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Row 2: Claim + Rank -->
+      <div class="grid-2">
+
+        <!-- Daily Claim -->
+        <div class="card">
+          <div class="card-title"><span class="dot"></span> Daily Pool Claim</div>
+          <div class="data-row"><span class="data-key">Pending Reward</span><span class="data-val green" id="pendingReward">—</span></div>
+          <div class="data-row"><span class="data-key">Next Claim Time</span><span class="data-val" id="nextClaim">—</span></div>
+          <div class="data-row"><span class="data-key">Status</span><span class="data-val" id="claimStatus">—</span></div>
+
+          <div style="margin-top:20px">
+            <button class="btn btn-green" id="claimBtn">
+              Claim Daily Reward
+            </button>
+          </div>
+
+          <div style="margin-top:16px;padding:12px 14px;background:rgba(13,255,170,0.05);border-radius:10px;border:1px solid rgba(13,255,170,0.1);font-size:0.78rem;color:var(--muted);line-height:1.6">
+            2% of pool × your share of total deposits. 5% fee applies. Max 200% total return.
+          </div>
+        </div>
+
+        <!-- Rank Reward -->
+        <div class="card">
+          <div class="card-title"><span class="dot"></span> Rank Rewards</div>
+          <div style="text-align:center;margin-bottom:16px">
+            <div class="rank-badge" id="rankBadge">0</div>
+            <div style="font-size:0.75rem;color:var(--muted)">Current Rank</div>
+          </div>
+          <div class="data-row"><span class="data-key">Achieved Rank</span><span class="data-val gold" id="achievedRank">—</span></div>
+          <div class="data-row"><span class="data-key">Highest Claimed</span><span class="data-val" id="claimedRank">—</span></div>
+          <div class="data-row"><span class="data-key">Claimable Ranks</span><span class="data-val green" id="claimableRanks">—</span></div>
+          <div class="data-row"><span class="data-key">Pending Reward</span><span class="data-val gold" id="pendingRankReward">—</span></div>
+          <div style="margin-top:16px">
+            <button class="btn btn-gold" id="claimRankBtn">
+              Claim Rank Rewards
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Row 3: Rank Progress + Team -->
+      <div class="grid-2">
+
+        <!-- Rank Progress -->
+        <div class="card">
+          <div class="card-title"><span class="dot"></span> Rank Progress</div>
+          <div class="data-row" style="margin-bottom:14px">
+            <span class="data-key">Next Rank Target</span>
+            <span class="data-val gold" id="nextRankTarget">Rank —</span>
+          </div>
+
+          <div class="leg-row">
+            <div class="leg-label">Leg 1</div>
+            <div class="leg-bar-wrap"><div class="leg-bar-fill l1" id="leg1Bar" style="width:0%"></div></div>
+            <div class="leg-count"><span id="leg1Count">0</span> / <span id="leg1Req">—</span></div>
+          </div>
+          <div class="leg-row">
+            <div class="leg-label">Leg 2</div>
+            <div class="leg-bar-wrap"><div class="leg-bar-fill l2" id="leg2Bar" style="width:0%"></div></div>
+            <div class="leg-count"><span id="leg2Count">0</span> / <span id="leg2Req">—</span></div>
+          </div>
+          <div class="leg-row">
+            <div class="leg-label">Leg 3</div>
+            <div class="leg-bar-wrap"><div class="leg-bar-fill l3" id="leg3Bar" style="width:0%"></div></div>
+            <div class="leg-count"><span id="leg3Count">0</span> / <span id="leg3Req">—</span></div>
+          </div>
+
+          <div style="margin-top:14px;padding-top:14px;border-top:1px solid rgba(255,255,255,0.05)">
+            <div class="data-row"><span class="data-key">Rank Reward Per Level</span><span class="data-val gold" id="rankRewardPer">50 Tokens</span></div>
+          </div>
+        </div>
+
+        <!-- Team / Direct -->
+        <div class="card">
+          <div class="card-title"><span class="dot"></span> Team Overview</div>
+          <div class="grid-3" style="margin-bottom:16px">
+            <div class="ref-box">
+              <div class="num" id="directCount">0</div>
+              <div class="lbl">Directs</div>
+            </div>
+            <div class="ref-box">
+              <div class="num" id="qualifiedDirect">0</div>
+              <div class="lbl">Qualified</div>
+            </div>
+            <div class="ref-box">
+              <div class="num" id="level1Team">0</div>
+              <div class="lbl">Level 1</div>
+            </div>
+          </div>
+
+          <div class="card-title" style="margin-bottom:12px"><span class="dot" style="background:var(--green);box-shadow:0 0 10px var(--green)"></span> My Referral Link</div>
+          <div style="position:relative">
+            <input class="inp" id="refLink" readonly style="padding-right:80px;font-size:0.72rem" />
+            <button onclick="copyRef()" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);background:rgba(232,184,75,0.15);border:1px solid var(--border);color:var(--gold);font-size:0.7rem;padding:5px 12px;border-radius:6px;cursor:pointer;font-family:'Cinzel',serif">COPY</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Level Breakdown Table -->
+      <div class="card">
+        <div class="card-title"><span class="dot"></span> Level Income Breakdown</div>
+        <div style="overflow-x:auto">
+          <table class="level-table" id="levelTable">
+            <thead>
+              <tr>
+                <th>Level</th>
+                <th>%</th>
+                <th>Income Earned</th>
+                <th>Missed Income</th>
+                <th>Unlock Condition</th>
+              </tr>
+            </thead>
+            <tbody id="levelTbody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Refresh -->
+      <div style="text-align:center">
+        <button class="btn btn-outline" onclick="loadDashboard()" style="width:auto;padding:10px 32px">
+          ↻ Refresh Dashboard
+        </button>
+      </div>
+
+    </div>
+  </main>
+</div>
+
+<!-- Toast -->
+<div id="toast"></div>
+
+<script>
+// ─────────────────────────────────────────────
+// CONFIG
+// ─────────────────────────────────────────────
+const CONTRACT_ADDRESS = "0xC4cC162205Ef007B3785EA428ecfB0DF699A1623";
+
+const CONTRACT_ABI = [
+  // Read
+  "function token() view returns (address)",
+  "function feeWallet() view returns (address)",
+  "function defaultReferrer() view returns (address)",
+  "function totalDeposited() view returns (uint256)",
+  "function contractPool() view returns (uint256)",
+  "function totalUsers() view returns (uint256)",
+  "function getUserDashboard(address) view returns (tuple(bool registered,address referrer,uint256 deposit,uint256 directQualified,uint256 directCount,uint256 maxReturn,uint256 totalEarned,uint256 remainingCap,uint256 claimed,uint256 totalReferralIncome,uint256 totalMissedIncome,bool canClaim,uint256 nextClaimTime,uint256 pendingReward,uint256 thisMonthDeposit,bool referralActive,uint256 monthlyDepositReq,uint256 achievedRank,uint256 highestClaimed,uint256 claimableRanks,uint256 pendingRankReward))",
+  "function getRankDashboard(address) view returns (tuple(uint256 achievedRank,uint256 highestRankClaimed,uint256 claimableRanks,uint256 pendingRankReward,uint256 leg1TeamCount,uint256 leg2TeamCount,uint256 leg3TeamCount,uint256 nextRank,uint256 nextReq1,uint256 nextReq2,uint256 nextReq3,uint256 rankLeg1Base,uint256 rankLeg2Base,uint256 rankLeg3Base,uint256 rankReward))",
+  "function getPoolStats() view returns (tuple(uint256 contractPool,uint256 totalDeposited,uint256 totalUsers,uint256 dailyPercent,uint256 maxRoi,uint256 minDeposit,uint256 directRequirement,uint256 feePercent,uint256 monthlyDepositReq,uint256 rankReward,uint256 rankLeg1Base,uint256 rankLeg2Base,uint256 rankLeg3Base))",
+  "function getLevelBreakdown(address) view returns (tuple(uint256[9] incomes,uint256[9] missed,uint256[9] percents))",
+  "function getDirectReferrals(address) view returns (address[])",
+  "function getTeamCounts(address) view returns (uint256[50])",
+  "function getRankProgress(address) view returns (uint256 nextRank,uint256 req1,uint256 req2,uint256 req3,uint256 current1,uint256 current2,uint256 current3,uint256 claimableRanks)",
+  // Write
+  "function deposit(uint256 amount, address ref) external",
+  "function claim() external",
+  "function claimRankReward() external",
+];
+
+const ERC20_ABI = [
+  "function approve(address spender, uint256 amount) returns (bool)",
+  "function allowance(address owner, address spender) view returns (uint256)",
+  "function balanceOf(address) view returns (uint256)",
+  "function decimals() view returns (uint8)",
+  "function symbol() view returns (string)",
+];
+
+// ─────────────────────────────────────────────
+// STATE
+// ─────────────────────────────────────────────
+let provider, signer, contract, tokenContract;
+let walletAddress = null;
+let tokenDecimals = 18;
+let tokenSymbol = "TOKEN";
+let approved = false;
+
+// ─────────────────────────────────────────────
+// CONNECT
+// ─────────────────────────────────────────────
+async function connectWallet() {
+  if (!window.ethereum) { toast("MetaMask not found!", "error"); return; }
+  try {
+    toast("Connecting wallet…", "info");
+    await window.ethereum.request({ method: 'eth_requestAccounts' });
+    provider = new ethers.BrowserProvider(window.ethereum);
+    signer   = await provider.getSigner();
+    walletAddress = await signer.getAddress();
+
+    contract = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, signer);
+
+    // Get token address
+    const tokenAddr = await contract.token();
+    tokenContract   = new ethers.Contract(tokenAddr, ERC20_ABI, signer);
+    tokenDecimals   = Number(await tokenContract.decimals());
+    tokenSymbol     = await tokenContract.symbol();
+
+    // Chain
+    const net = await provider.getNetwork();
+    const chainNames = { 56n:"BSC Mainnet", 97n:"BSC Testnet", 1n:"Ethereum", 137n:"Polygon", 8453n:"Base" };
+    document.getElementById("chainBadge").textContent = "● " + (chainNames[net.chainId] || "Chain "+net.chainId.toString());
+
+    // UI
+    document.getElementById("walletAddr").textContent = shortAddr(walletAddress);
+    document.getElementById("walletAddr").style.display = "block";
+    document.getElementById("connectBtn").textContent = "Connected";
+    document.getElementById("connectBtn").disabled = true;
+    document.getElementById("overlay").style.opacity = "0";
+    document.getElementById("overlay").style.pointerEvents = "none";
+
+    // Set referral link
+    document.getElementById("refLink").value = window.location.href.split("?")[0] + "?ref=" + walletAddress;
+
+    // Load from URL ref
+    const urlRef = new URLSearchParams(window.location.search).get("ref");
+    if (urlRef && ethers.isAddress(urlRef)) document.getElementById("refAddr").value = urlRef;
+
+    await loadDashboard();
+    toast("Wallet connected!", "success");
+
+    // Listen for account changes
+    window.ethereum.on("accountsChanged", () => location.reload());
+    window.ethereum.on("chainChanged",    () => location.reload());
+  } catch(e) {
+    toast("Connection failed: " + (e.reason || e.message || e), "error");
+  }
+}
+
+// ─────────────────────────────────────────────
+// LOAD DASHBOARD
+// ─────────────────────────────────────────────
+async function loadDashboard() {
+  if (!walletAddress) return;
+  document.getElementById("loadingState").style.display = "block";
+  document.getElementById("dashContent").style.display  = "none";
+
+  try {
+    const [ud, rd, ps, lb, teamCounts] = await Promise.all([
+      contract.getUserDashboard(walletAddress),
+      contract.getRankDashboard(walletAddress),
+      contract.getPoolStats(),
+      contract.getLevelBreakdown(walletAddress),
+      contract.getTeamCounts(walletAddress),
+    ]);
+
+    fillPoolStats(ps);
+    fillUserDash(ud);
+    fillRankDash(rd, ps);
+    fillLevels(lb);
+
+    document.getElementById("level1Team").textContent = teamCounts[0].toString();
+    document.getElementById("loadingState").style.display = "none";
+    document.getElementById("dashContent").style.display  = "flex";
+  } catch(e) {
+    toast("Failed to load data: " + (e.reason || e.message), "error");
+    document.getElementById("loadingState").style.display = "none";
+  }
+}
+
+function fmt(wei, dec=tokenDecimals) {
+  const n = Number(ethers.formatUnits(wei, dec));
+  if (n >= 1e6) return (n/1e6).toFixed(2) + "M";
+  if (n >= 1e3) return (n/1e3).toFixed(2) + "K";
+  return n.toFixed(2);
+}
+
+function fillPoolStats(ps) {
+  document.getElementById("statPool").textContent      = fmt(ps.contractPool)    + " " + tokenSymbol;
+  document.getElementById("statDeposited").textContent = fmt(ps.totalDeposited)  + " " + tokenSymbol;
+  document.getElementById("statUsers").textContent     = ps.totalUsers.toString();
+  document.getElementById("minDep").textContent        = fmt(ps.minDeposit)      + " " + tokenSymbol;
+  document.getElementById("monthlyReq").textContent    = fmt(ps.monthlyDepositReq) + " " + tokenSymbol;
+}
+
+function fillUserDash(ud) {
+  document.getElementById("myDeposit").textContent    = fmt(ud.deposit)            + " " + tokenSymbol;
+  document.getElementById("myEarned").textContent     = fmt(ud.totalEarned)        + " " + tokenSymbol;
+  document.getElementById("myClaimed").textContent    = fmt(ud.claimed)            + " " + tokenSymbol;
+  document.getElementById("myRefIncome").textContent  = fmt(ud.totalReferralIncome)+ " " + tokenSymbol;
+  document.getElementById("myMissed").textContent     = fmt(ud.totalMissedIncome)  + " " + tokenSymbol;
+  document.getElementById("myMaxReturn").textContent  = fmt(ud.maxReturn)          + " " + tokenSymbol;
+  document.getElementById("myRemaining").textContent  = fmt(ud.remainingCap)       + " " + tokenSymbol;
+  document.getElementById("thisMonthDep").textContent = fmt(ud.thisMonthDeposit)   + " " + tokenSymbol;
+
+  // ROI bar
+  const pct = ud.maxReturn > 0n ? Number((ud.totalEarned * 100n) / ud.maxReturn) : 0;
+  document.getElementById("roiBar").style.width = Math.min(pct,100) + "%";
+  document.getElementById("roiPct").textContent = pct.toFixed(1) + "%";
+
+  // Claim section
+  document.getElementById("pendingReward").textContent = fmt(ud.pendingReward) + " " + tokenSymbol;
+  document.getElementById("claimBtn").disabled = !ud.canClaim;
+
+  if (!ud.canClaim) {
+    if (ud.deposit === 0n) {
+      document.getElementById("claimStatus").textContent = "No deposit";
+      document.getElementById("claimStatus").className = "data-val red";
+    } else if (ud.remainingCap === 0n) {
+      document.getElementById("claimStatus").textContent = "Cap reached";
+      document.getElementById("claimStatus").className = "data-val red";
+    } else {
+      const diff = Number(ud.nextClaimTime) - Math.floor(Date.now()/1000);
+      document.getElementById("claimStatus").textContent = diff > 0 ? "Wait " + fmtDuration(diff) : "Ready";
+      document.getElementById("claimStatus").className = "data-val " + (diff > 0 ? "" : "green");
+    }
+  } else {
+    document.getElementById("claimStatus").textContent = "✓ Ready to Claim";
+    document.getElementById("claimStatus").className = "data-val green";
+  }
+
+  document.getElementById("nextClaim").textContent =
+    ud.nextClaimTime > 0n
+      ? new Date(Number(ud.nextClaimTime)*1000).toLocaleString()
+      : "—";
+
+  // Direct info
+  document.getElementById("directCount").textContent    = ud.directCount.toString();
+  document.getElementById("qualifiedDirect").textContent = ud.directQualified.toString();
+
+  // Referral active status
+  const el = document.getElementById("refActiveStatus");
+  if (ud.referralActive) {
+    el.textContent = "✓ Referral income active — Monthly deposit requirement met";
+    el.style.color = "var(--green)";
+  } else {
+    el.textContent = "⚠ Deposit " + fmt(ud.monthlyDepositReq - ud.thisMonthDeposit) + " more " + tokenSymbol + " this month to activate referral income";
+    el.style.color = "var(--gold)";
+  }
+
+  // Rank section in user dash
+  document.getElementById("achievedRank").textContent     = ud.achievedRank.toString();
+  document.getElementById("claimedRank").textContent      = ud.highestClaimed.toString();
+  document.getElementById("claimableRanks").textContent   = ud.claimableRanks.toString();
+  document.getElementById("pendingRankReward").textContent = fmt(ud.pendingRankReward) + " " + tokenSymbol;
+  document.getElementById("claimRankBtn").disabled        = ud.claimableRanks === 0n;
+  document.getElementById("rankBadge").textContent        = ud.achievedRank.toString();
+}
+
+function fillRankDash(rd, ps) {
+  // Rank progress
+  document.getElementById("nextRankTarget").textContent = "Rank " + rd.nextRank.toString();
+  document.getElementById("rankRewardPer").textContent  = fmt(rd.rankReward) + " " + tokenSymbol;
+
+  const l1c = Number(rd.leg1TeamCount);
+  const l2c = Number(rd.leg2TeamCount);
+  const l3c = Number(rd.leg3TeamCount);
+  const r1  = Number(rd.nextReq1);
+  const r2  = Number(rd.nextReq2);
+  const r3  = Number(rd.nextReq3);
+
+  document.getElementById("leg1Count").textContent = l1c;
+  document.getElementById("leg2Count").textContent = l2c;
+  document.getElementById("leg3Count").textContent = l3c;
+  document.getElementById("leg1Req").textContent   = r1;
+  document.getElementById("leg2Req").textContent   = r2;
+  document.getElementById("leg3Req").textContent   = r3;
+
+  document.getElementById("leg1Bar").style.width = r1 > 0 ? Math.min(l1c/r1*100, 100) + "%" : "0%";
+  document.getElementById("leg2Bar").style.width = r2 > 0 ? Math.min(l2c/r2*100, 100) + "%" : "0%";
+  document.getElementById("leg3Bar").style.width = r3 > 0 ? Math.min(l3c/r3*100, 100) + "%" : "0%";
+}
+
+const LEVEL_NAMES = ["L1","L2","L3","L4","L5","L6","L7","L8","L9"];
+const UNLOCK_INFO = [
+  "1 qualified direct",
+  "2 qualified directs",
+  "3 qualified directs",
+  "3 directs + 1 grandchild",
+  "3 directs + 2 grandchildren",
+  "3 directs + 3 grandchildren",
+  "3 directs + 4 grandchildren",
+  "3 directs + 5 grandchildren",
+  "3 directs + 6 grandchildren",
+];
+
+function fillLevels(lb) {
+  const tbody = document.getElementById("levelTbody");
+  tbody.innerHTML = "";
+  for (let i = 0; i < 9; i++) {
+    const inc  = fmt(lb.incomes[i]);
+    const miss = fmt(lb.missed[i]);
+    const pct  = lb.percents[i].toString();
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td><span class="lvl-num">${i+1}</span></td>
+      <td style="color:var(--gold);font-family:'DM Mono',monospace">${pct}%</td>
+      <td style="color:var(--green);font-family:'DM Mono',monospace">${inc} ${tokenSymbol}</td>
+      <td style="color:var(--red);font-family:'DM Mono',monospace">${miss} ${tokenSymbol}</td>
+      <td style="color:var(--muted);font-size:0.78rem">${UNLOCK_INFO[i]}</td>
+    `;
+    tbody.appendChild(tr);
+  }
+}
+
+// ─────────────────────────────────────────────
+// APPROVE
+// ─────────────────────────────────────────────
+document.getElementById("approveBtn").addEventListener("click", async () => {
+  if (!signer) { toast("Connect wallet first", "error"); return; }
+  const amtStr = document.getElementById("depositAmt").value;
+  if (!amtStr || isNaN(amtStr) || Number(amtStr) <= 0) { toast("Enter valid amount", "error"); return; }
+
+  try {
+    setLoading("approveBtn", true);
+    const amt = ethers.parseUnits(amtStr, tokenDecimals);
+    const tx  = await tokenContract.approve(CONTRACT_ADDRESS, amt);
+    toast("Approving… TX: " + shortAddr(tx.hash), "info");
+    await tx.wait();
+    approved = true;
+    document.getElementById("depositBtn").disabled = false;
+    toast("Approved! Now click Deposit.", "success");
+  } catch(e) {
+    toast("Approval failed: " + (e.reason || e.message), "error");
+  } finally {
+    setLoading("approveBtn", false);
+  }
+});
+
+// ─────────────────────────────────────────────
+// DEPOSIT
+// ─────────────────────────────────────────────
+document.getElementById("depositBtn").addEventListener("click", async () => {
+  if (!signer) return;
+  const amtStr = document.getElementById("depositAmt").value;
+  let ref = document.getElementById("refAddr").value.trim();
+  if (!ethers.isAddress(ref)) ref = ethers.ZeroAddress;
+  if (!amtStr || Number(amtStr) <= 0) { toast("Enter valid amount", "error"); return; }
+
+  try {
+    setLoading("depositBtn", true);
+    const amt = ethers.parseUnits(amtStr, tokenDecimals);
+    const tx  = await contract.deposit(amt, ref);
+    toast("Depositing… TX: " + shortAddr(tx.hash), "info");
+    await tx.wait();
+    toast("Deposit successful!", "success");
+    approved = false;
+    document.getElementById("depositBtn").disabled = true;
+    await loadDashboard();
+  } catch(e) {
+    toast("Deposit failed: " + (e.reason || e.message), "error");
+  } finally {
+    setLoading("depositBtn", false);
+  }
+});
+
+// ─────────────────────────────────────────────
+// CLAIM DAILY
+// ─────────────────────────────────────────────
+document.getElementById("claimBtn").addEventListener("click", async () => {
+  if (!signer) return;
+  try {
+    setLoading("claimBtn", true);
+    const tx = await contract.claim();
+    toast("Claiming… TX: " + shortAddr(tx.hash), "info");
+    await tx.wait();
+    toast("Claim successful!", "success");
+    await loadDashboard();
+  } catch(e) {
+    toast("Claim failed: " + (e.reason || e.message), "error");
+  } finally {
+    setLoading("claimBtn", false);
+  }
+});
+
+// ─────────────────────────────────────────────
+// CLAIM RANK
+// ─────────────────────────────────────────────
+document.getElementById("claimRankBtn").addEventListener("click", async () => {
+  if (!signer) return;
+  try {
+    setLoading("claimRankBtn", true);
+    const tx = await contract.claimRankReward();
+    toast("Claiming rank reward… TX: " + shortAddr(tx.hash), "info");
+    await tx.wait();
+    toast("Rank reward claimed!", "success");
+    await loadDashboard();
+  } catch(e) {
+    toast("Rank claim failed: " + (e.reason || e.message), "error");
+  } finally {
+    setLoading("claimRankBtn", false);
+  }
+});
+
+// ─────────────────────────────────────────────
+// HELPERS
+// ─────────────────────────────────────────────
+function shortAddr(addr) {
+  return addr.slice(0,6) + "…" + addr.slice(-4);
+}
+
+function fmtDuration(sec) {
+  const h = Math.floor(sec/3600);
+  const m = Math.floor((sec%3600)/60);
+  return h + "h " + m + "m";
+}
+
+let toastTimer;
+function toast(msg, type="info") {
+  const el = document.getElementById("toast");
+  el.textContent = msg;
+  el.className   = "show " + type;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { el.className = ""; }, 4000);
+}
+
+function setLoading(btnId, loading) {
+  const btn = document.getElementById(btnId);
+  if (loading) {
+    btn._orig = btn.innerHTML;
+    btn.innerHTML = '<span class="spinner"></span> Processing…';
+    btn.disabled = true;
+  } else {
+    btn.innerHTML = btn._orig || btn.innerHTML;
+    btn.disabled  = false;
+  }
+}
+
+function copyRef() {
+  const val = document.getElementById("refLink").value;
+  navigator.clipboard.writeText(val).then(() => toast("Referral link copied!", "success"));
+}
+
+// ─────────────────────────────────────────────
+// INIT
+// ─────────────────────────────────────────────
+document.getElementById("connectBtn").addEventListener("click", connectWallet);
+document.getElementById("overlayConnectBtn").addEventListener("click", connectWallet);
+
+// Auto-connect if already authorized
+(async () => {
+  if (window.ethereum) {
+    const accounts = await window.ethereum.request({ method: 'eth_accounts' });
+    if (accounts.length > 0) connectWallet();
+  }
+})();
+</script>
+</body>
+</html>
